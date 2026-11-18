@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# CONTENT PROMPTED BY ME. IMPLEMENTED BY AI & SI.
+# PATH: /usr/local/bin/ssh-failover-manager
+
+set -u
+
+CONFIG="/etc/ssh-failover/hosts.conf"
+FAILOVER="/usr/local/bin/ssh-failover"
+
+PIDS=()
+PORTS=()
+
+# Find socat
+SOCAT_BIN="$(command -v socat || true)"
+
+if [[ -z "$SOCAT_BIN" ]]; then
+    echo "socat is not installed." >&2
+    exit 1
+fi
+
+if [[ ! -r "$CONFIG" ]]; then
+    echo "Cannot read configuration: $CONFIG" >&2
+    exit 1
+fi
+
+if [[ ! -x "$FAILOVER" ]]; then
+    echo "Failover script not found or not executable: $FAILOVER" >&2
+    exit 1
+fi
+
+# Stop all listeners when the manager exits
+cleanup() {
+    echo "Stopping SSH failover listeners..."
+
+    for PID in "${PIDS[@]}"; do
+        kill "$PID" 2>/dev/null || true
+    done
+
+    wait 2>/dev/null || true
+}
+
+trap cleanup EXIT TERM INT
+
+# Read configuration
+while IFS= read -r LINE || [[ -n "$LINE" ]]; do
+
+    # Ignore blank lines and comments
+    [[ "$LINE" =~ ^[[:space:]]*(#|$) ]] && continue
+
+    read -r HOST LAN_IP VPN_IP PORT EXTRA <<< "$LINE"
+
+    # Validate required fields
+    if [[ -z "${HOST:-}" || -z "${LAN_IP:-}" ||
+          -z "${VPN_IP:-}" || -z "${PORT:-}" || -n "${EXTRA:-}" ]]; then
+        echo "Invalid configuration line: $LINE" >&2
+        exit 1
+    fi
+
+    if [[ ! "$PORT" =~ ^[0-9]+$ ]] ||
+       (( PORT < 1024 || PORT > 65535 )); then
+        echo "Invalid local port for $HOST: $PORT" >&2
+        exit 1
+    fi
+
+    if [[ ! "$HOST" =~ ^[a-zA-Z0-9_.-]+$ ]]; then
+        echo "Invalid hostname: $HOST" >&2
+        exit 1
+    fi
+
+    # Prevent duplicate local ports
+    for EXISTING_PORT in "${PORTS[@]}"; do
+        if [[ "$PORT" == "$EXISTING_PORT" ]]; then
+            echo "Duplicate local port: $PORT" >&2
+            exit 1
+        fi
+    done
+
+    PORTS+=("$PORT")
+
+    echo "Starting $HOST on 127.0.0.1:$PORT"
+
+    "$SOCAT_BIN" \
+        "TCP-LISTEN:${PORT},bind=127.0.0.1,reuseaddr,fork" \
+        "EXEC:${FAILOVER} ${HOST}" &
+
+    PIDS+=("$!")
+
+done < "$CONFIG"
+
+if [[ ${#PIDS[@]} -eq 0 ]]; then
+    echo "No hosts configured in $CONFIG" >&2
+    exit 1
+fi
+
+echo "SSH failover manager started."
+
+wait

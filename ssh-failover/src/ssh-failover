@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# CONTENT PROMPTED BY ME. IMPLEMENTED BY AI & SI.
+# PATH: /usr/local/bin/ssh-failover
+
+set -u
+
+HOST="${1:-}"
+PORT="${2:-22}"
+CONFIG="/etc/ssh-failover/hosts.conf"
+
+# Validate arguments
+if [[ -z "$HOST" ]]; then
+    echo "Usage: ssh-failover HOST [SSH_PORT]" >&2
+    exit 1
+fi
+
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+    echo "Invalid SSH port: $PORT" >&2
+    exit 1
+fi
+
+# Check configuration
+if [[ ! -r "$CONFIG" ]]; then
+    echo "Cannot read configuration: $CONFIG" >&2
+    exit 1
+fi
+
+# Find host configuration
+read -r NAME LAN_IP VPN_IP LOCAL_PORT < <(
+    awk -v host="$HOST" '$1 == host && $1 !~ /^#/ {
+        print $1, $2, $3, $4
+        exit
+    }' "$CONFIG"
+)
+
+if [[ -z "${NAME:-}" || -z "${LAN_IP:-}" || -z "${VPN_IP:-}" ]]; then
+    echo "Host configuration not found: $HOST" >&2
+    exit 1
+fi
+
+# Find netcat implementation
+NC_BIN="$(command -v ncat || command -v nc || true)"
+
+if [[ -z "$NC_BIN" ]]; then
+    echo "Neither ncat nor nc was found. Install a netcat package." >&2
+    exit 1
+fi
+
+# Check LAN connectivity
+if "$NC_BIN" -z -w 2 "$LAN_IP" "$PORT" >/dev/null 2>&1; then
+    echo "Connecting via LAN: $LAN_IP:$PORT" >&2
+    exec "$NC_BIN" "$LAN_IP" "$PORT"
+else
+    echo "Connecting via Tailscale: $VPN_IP:$PORT" >&2
+
+    if ! "$NC_BIN" -z -w 2 "$VPN_IP" "$PORT" >/dev/null 2>&1; then
+        echo "Cannot reach $HOST through LAN or Tailscale." >&2
+        exit 1
+    fi
+
+    exec "$NC_BIN" "$VPN_IP" "$PORT"
+fi

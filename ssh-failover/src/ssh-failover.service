@@ -1,0 +1,18 @@
+# CONTENT PROMPTED BY ME. IMPLEMENTED BY AI & SI.
+# PATH: /etc/systemd/system/ssh-failover.service
+
+[Unit]
+Description=SSH LAN and VPN Failover Manager
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=simple
+User=me
+ExecStart=/usr/local/bin/ssh-failover-manager
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
