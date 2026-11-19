@@ -3,7 +3,6 @@
 # PROMPTED BY ME. IMPLEMENTED BY AI & SI.
 
 set -Eeuo pipefail
-
 echo "Installing SSH Failover..."
 
 # Configuration

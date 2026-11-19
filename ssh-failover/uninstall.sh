@@ -1,10 +1,8 @@
 
 #!/usr/bin/env bash
-
 # PROMPTED BY ME. IMPLEMENTED BY AI & SI.
 
 set -Eeuo pipefail
-
 echo "Uninstalling SSH Failover..."
 
 if [[ "$EUID" -ne 0 ]]; then
