@@ -1,6 +1,6 @@
 # SSH Failover
 
-CONTENT PROMPTED BY ME. IMPLEMENTED BY AI & SI.
+PROMPTED BY ME. IMPLEMENTED BY AI & SI.
 
 Automatically connect to remote Linux servers through LAN or VPN using SSH failover.
 

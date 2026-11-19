@@ -1,7 +1,7 @@
 
 #!/usr/bin/env bash
 
-# CONTENT PROMPTED BY ME. IMPLEMENTED BY AI & SI.
+# PROMPTED BY ME. IMPLEMENTED BY AI & SI.
 
 set -Eeuo pipefail
 
